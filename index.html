@@ -19,10 +19,10 @@
   </style>
 </head>
 
-<body class="bg-gray-900 text-gray-100 h-screen flex overflow-hidden">
+<body class="bg-gray-900 text-gray-100 min-h-screen flex overflow-x-hidden">
 
-  <!-- Sidebar -->
-  <aside class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
+  <!-- Sidebar (hidden on mobile) -->
+  <aside class="hidden md:flex w-64 bg-gray-800 border-r border-gray-700 flex-col">
     <div class="p-4 text-lg font-bold border-b border-gray-700 flex justify-between items-center">
       Chats
       <button id="newChatBtn" class="text-sm bg-indigo-600 px-2 py-1 rounded hover:bg-indigo-500">
@@ -38,10 +38,10 @@
   </aside>
 
   <!-- Main Chat Area -->
-  <main class="flex-1 flex flex-col">
-    <div id="chatArea" class="flex-1 overflow-y-auto p-6 space-y-4"></div>
+  <main class="flex-1 flex flex-col min-h-0">
+    <div id="chatArea" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
 
-    <div class="border-t border-gray-700 p-4 flex gap-2">
+    <div class="border-t border-gray-700 p-3 flex gap-2">
       <input
         id="userInput"
         type="text"
@@ -58,8 +58,8 @@
   </main>
 
   <!-- Settings Modal -->
-  <div id="settingsModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center">
-    <div class="bg-gray-800 w-96 rounded-lg p-6 space-y-4">
+  <div id="settingsModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+    <div class="bg-gray-800 w-96 max-w-[90%] rounded-lg p-6 space-y-4">
       <h2 class="text-xl font-bold">Settings</h2>
 
       <div>
@@ -92,7 +92,7 @@
     </div>
   </div>
 
-  <!-- ✅ SCRIPT AT END OF BODY (NO BLANK PAGE ISSUES) -->
+  <!-- SCRIPT AT END (SAFE) -->
   <script>
     const chatArea = document.getElementById("chatArea");
     const chatList = document.getElementById("chatList");
@@ -116,6 +116,7 @@
     }
 
     function renderChats() {
+      if (!chatList) return;
       chatList.innerHTML = "";
       Object.keys(chats).forEach(id => {
         const btn = document.createElement("button");
@@ -135,21 +136,17 @@
       if (!activeChatId) return;
 
       chats[activeChatId].forEach(msg => {
-        const div = document.createElement("div");
-        div.className = msg.role === "user"
-          ? "text-right"
-          : "text-left";
+        const wrap = document.createElement("div");
+        wrap.className = msg.role === "user" ? "text-right" : "text-left";
 
-        div.innerHTML = `
-          <div class="inline-block max-w-xl px-4 py-2 rounded-lg ${
-            msg.role === "user"
-              ? "bg-indigo-600"
-              : "bg-gray-700"
+        wrap.innerHTML = `
+          <div class="inline-block max-w-[85%] px-4 py-2 rounded-lg ${
+            msg.role === "user" ? "bg-indigo-600" : "bg-gray-700"
           }">
             ${msg.content}
           </div>
         `;
-        chatArea.appendChild(div);
+        chatArea.appendChild(wrap);
       });
 
       chatArea.scrollTop = chatArea.scrollHeight;
@@ -167,6 +164,12 @@
 
       const apiKey = localStorage.getItem("apiKey");
       const model = localStorage.getItem("model") || "google/gemini-pro";
+
+      if (!apiKey) {
+        chats[activeChatId].push({ role: "assistant", content: "⚠️ Set your API key in Settings." });
+        renderMessages();
+        return;
+      }
 
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -190,35 +193,35 @@
 
     // Settings
     const settingsModal = document.getElementById("settingsModal");
-    document.getElementById("settingsBtn").onclick = () => {
+
+    document.getElementById("settingsBtn")?.addEventListener("click", () => {
       settingsModal.classList.remove("hidden");
       settingsModal.classList.add("flex");
-      document.getElementById("apiKeyInput").value = localStorage.getItem("apiKey") || "";
-      document.getElementById("modelInput").value = localStorage.getItem("model") || "";
-    };
+      apiKeyInput.value = localStorage.getItem("apiKey") || "";
+      modelInput.value = localStorage.getItem("model") || "";
+    });
 
     document.getElementById("closeSettings").onclick = () => {
       settingsModal.classList.add("hidden");
     };
 
     document.getElementById("saveSettings").onclick = () => {
-      localStorage.setItem("apiKey", document.getElementById("apiKeyInput").value);
-      localStorage.setItem("model", document.getElementById("modelInput").value);
+      localStorage.setItem("apiKey", apiKeyInput.value);
+      localStorage.setItem("model", modelInput.value);
       settingsModal.classList.add("hidden");
     };
 
     document.getElementById("sendBtn").onclick = sendMessage;
-    document.getElementById("newChatBtn").onclick = createChat;
+    document.getElementById("newChatBtn")?.addEventListener("click", createChat);
 
     userInput.addEventListener("keydown", e => {
       if (e.key === "Enter") sendMessage();
     });
 
-    // Init
     if (!activeChatId) createChat();
     renderChats();
     renderMessages();
   </script>
 
 </body>
-</html>
+          </html>
