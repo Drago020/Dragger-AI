@@ -4,26 +4,19 @@
   <meta charset="UTF-8" />
   <title>Dragger AI Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
   <script src="https://cdn.tailwindcss.com"></script>
 
   <style>
-    ::-webkit-scrollbar {
-      width: 6px;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #555;
-      border-radius: 6px;
-    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: #555; border-radius: 6px; }
 
     .app-bg {
-      background-image: url("wallpaper.jpeg");
+      background-image: url("wallpaper.jpg");
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
     }
 
-    /* ✅ FIXED overlay (removed pointer-events bug) */
     .app-overlay {
       background: rgba(0, 0, 0, 0.65);
     }
@@ -61,17 +54,14 @@
   <!-- Main -->
   <main class="flex-1 flex flex-col min-h-0">
 
-    <!-- Mobile header -->
     <div class="md:hidden flex items-center justify-between px-4 py-3 border-b border-white/10 glass">
       <button id="menuBtn" class="text-xl">☰</button>
       <span class="font-bold">Dragger AI</span>
       <button id="settingsBtnMobile">⚙</button>
     </div>
 
-    <!-- Chat -->
     <div id="chatArea" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
 
-    <!-- Input -->
     <div class="border-t border-white/10 p-3 flex gap-2 glass">
       <input
         id="userInput"
@@ -149,7 +139,7 @@ function renderChats() {
       activeChatId = id;
       saveChats();
       renderMessages();
-      sidebar.classList.add("-translate-x-full"); // auto close on mobile
+      sidebar.classList.add("-translate-x-full");
     };
     chatList.appendChild(btn);
   });
@@ -169,8 +159,69 @@ function renderMessages() {
   chatArea.scrollTop = chatArea.scrollHeight;
 }
 
+async function typeAssistantMessage(text) {
+  const msg = { role: "assistant", content: "" };
+  chats[activeChatId].push(msg);
+  renderMessages();
+
+  for (let i = 0; i < text.length; i++) {
+    msg.content += text[i];
+    renderMessages();
+    await new Promise(r => setTimeout(r, 18));
+  }
+  saveChats();
+}
+
+/* ✅ SAFE API VERSION */
+async function sendMessage() {
+  if (!userInput.value.trim()) return;
+
+  const content = userInput.value;
+  userInput.value = "";
+
+  chats[activeChatId].push({ role: "user", content });
+  renderMessages();
+  saveChats();
+
+  const apiKey = localStorage.getItem("apiKey");
+  const model = localStorage.getItem("model") || "google/gemini-pro";
+
+  if (!apiKey) {
+    return typeAssistantMessage("⚠️ Set your API key in Settings.");
+  }
+
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + apiKey
+      },
+      body: JSON.stringify({
+        model,
+        messages: chats[activeChatId]
+      })
+    });
+
+    if (!res.ok) throw new Error("API Error");
+
+    const data = await res.json();
+    const reply = data.choices?.[0]?.message?.content || "No response";
+    await typeAssistantMessage(reply);
+
+  } catch (error) {
+    console.error(error);
+    await typeAssistantMessage("❌ Failed to get response. Check API key or internet.");
+  }
+}
+
 menuBtn?.addEventListener("click", () => {
   sidebar.classList.toggle("-translate-x-full");
+});
+
+document.getElementById("sendBtn").addEventListener("click", sendMessage);
+userInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendMessage();
 });
 
 function openSettings() {
