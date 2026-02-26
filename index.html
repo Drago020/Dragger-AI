@@ -5,7 +5,6 @@
   <title>Dragger AI Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <style>
@@ -17,7 +16,6 @@
       border-radius: 6px;
     }
 
-    /* Wallpaper */
     .app-bg {
       background-image: url("wallpaper.jpeg");
       background-size: cover;
@@ -25,7 +23,6 @@
       background-repeat: no-repeat;
     }
 
-    /* Overlay (click-safe) */
     .app-overlay {
       background: rgba(0, 0, 0, 0.65);
       pointer-events: none;
@@ -34,23 +31,11 @@
       pointer-events: auto;
     }
 
-    /* Liquid Glass */
     .glass {
       background: rgba(255, 255, 255, 0.08);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
       border: 1px solid rgba(255, 255, 255, 0.12);
-    }
-
-    /* Mobile sidebar animation */
-    .mobile-sidebar {
-      transition: transform 0.3s ease;
-    }
-    .mobile-hidden {
-      transform: translateX(-100%);
-    }
-    .mobile-visible {
-      transform: translateX(0);
     }
   </style>
 </head>
@@ -59,8 +44,11 @@
 
 <div class="h-[100dvh] flex overflow-x-hidden app-overlay">
 
-  <!-- Sidebar -->
-  <aside class="mobile-sidebar mobile-hidden md:mobile-visible hidden md:flex w-64 glass flex-col z-40">
+  <!-- ✅ FIXED Sidebar -->
+  <aside id="sidebar"
+    class="fixed md:static top-0 left-0 h-full w-64 glass flex flex-col z-40
+           -translate-x-full md:translate-x-0 transition-transform duration-300">
+
     <div class="p-4 border-b border-white/10 flex justify-between items-center">
       <span class="font-bold">Dragger AI</span>
       <button id="newChatBtn" class="bg-indigo-600 px-2 py-1 rounded">+</button>
@@ -132,7 +120,7 @@ const chatArea = document.getElementById("chatArea");
 const chatList = document.getElementById("chatList");
 const userInput = document.getElementById("userInput");
 const menuBtn = document.getElementById("menuBtn");
-const aside = document.querySelector("aside");
+const sidebar = document.getElementById("sidebar");
 const settingsModal = document.getElementById("settingsModal");
 const apiKeyInput = document.getElementById("apiKeyInput");
 const modelInput = document.getElementById("modelInput");
@@ -183,7 +171,6 @@ function renderMessages() {
   chatArea.scrollTop = chatArea.scrollHeight;
 }
 
-/* Typing animation */
 async function typeAssistantMessage(text) {
   const msg = { role: "assistant", content: "" };
   chats[activeChatId].push(msg);
@@ -223,20 +210,18 @@ async function sendMessage() {
   await typeAssistantMessage(data.choices?.[0]?.message?.content || "Error");
 }
 
-/* Mobile sidebar toggle */
+/* ✅ FIXED Sidebar Toggle */
 menuBtn?.addEventListener("click", () => {
-  aside.classList.remove("hidden");
-  aside.classList.toggle("mobile-hidden");
-  aside.classList.toggle("mobile-visible");
+  sidebar.classList.toggle("-translate-x-full");
 });
 
-/* Settings */
 function openSettings() {
   settingsModal.classList.remove("hidden");
   settingsModal.classList.add("flex");
   apiKeyInput.value = localStorage.getItem("apiKey") || "";
   modelInput.value = localStorage.getItem("model") || "";
 }
+
 document.getElementById("settingsBtn")?.addEventListener("click", openSettings);
 document.getElementById("settingsBtnMobile")?.addEventListener("click", openSettings);
 document.getElementById("closeSettings").onclick = () => settingsModal.classList.add("hidden");
