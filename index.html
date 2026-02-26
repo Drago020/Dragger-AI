@@ -223,50 +223,262 @@
           body: JSON.stringify({ model, messages: chats[activeChatId] })
         });
 
-        const data = await res.json();
-        const reply = data.choices?.[0]?.message?.content || "Error";
-        chats[activeChatId].push({ role: "assistant", content: reply });
-        renderMessages();
-        saveChats();
-      } catch {
-        chats[activeChatId].push({ role: "assistant", content: "⚠️ API error." });
-        renderMessages();
-      }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dragger AI Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #555;
+      border-radius: 6px;
     }
 
-    /* Sidebar toggle */
-    menuBtn?.addEventListener("click", () => {
-      aside.classList.toggle("hidden");
-    });
-
-    /* Settings modal */
-    function openSettings() {
-      settingsModal.classList.remove("hidden");
-      settingsModal.classList.add("flex");
-      apiKeyInput.value = localStorage.getItem("apiKey") || "";
-      modelInput.value = localStorage.getItem("model") || "";
+    /* Wallpaper */
+    .app-bg {
+      background-image: url("wallpaper.jpg");
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
     }
 
-    document.getElementById("settingsBtn")?.addEventListener("click", openSettings);
-    document.getElementById("settingsBtnMobile")?.addEventListener("click", openSettings);
-    document.getElementById("closeSettings").onclick = () => settingsModal.classList.add("hidden");
+    /* Overlay (click-safe) */
+    .app-overlay {
+      background: rgba(0, 0, 0, 0.65);
+      pointer-events: none;
+    }
+    .app-overlay > * {
+      pointer-events: auto;
+    }
 
-    document.getElementById("saveSettings").onclick = () => {
-      localStorage.setItem("apiKey", apiKeyInput.value.trim());
-      localStorage.setItem("model", modelInput.value.trim());
-      settingsModal.classList.add("hidden");
+    /* Liquid Glass */
+    .glass {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    /* Mobile sidebar animation */
+    .mobile-sidebar {
+      transition: transform 0.3s ease;
+    }
+    .mobile-hidden {
+      transform: translateX(-100%);
+    }
+    .mobile-visible {
+      transform: translateX(0);
+    }
+  </style>
+</head>
+
+<body class="text-gray-100 app-bg">
+
+<div class="h-[100dvh] flex overflow-x-hidden app-overlay">
+
+  <!-- Sidebar -->
+  <aside class="mobile-sidebar mobile-hidden md:mobile-visible hidden md:flex w-64 glass flex-col z-40">
+    <div class="p-4 border-b border-white/10 flex justify-between items-center">
+      <span class="font-bold">Dragger AI</span>
+      <button id="newChatBtn" class="bg-indigo-600 px-2 py-1 rounded">+</button>
+    </div>
+
+    <div id="chatList" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
+
+    <button id="settingsBtn" class="m-3 bg-white/10 hover:bg-white/20 px-3 py-2 rounded text-sm">
+      ⚙ Settings
+    </button>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 flex flex-col min-h-0">
+
+    <!-- Mobile header -->
+    <div class="md:hidden flex items-center justify-between px-4 py-3 border-b border-white/10 glass">
+      <button id="menuBtn" class="text-xl">☰</button>
+      <span class="font-bold">Dragger AI</span>
+      <button id="settingsBtnMobile">⚙</button>
+    </div>
+
+    <!-- Chat -->
+    <div id="chatArea" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+
+    <!-- Input -->
+    <div class="border-t border-white/10 p-3 flex gap-2 glass">
+      <input
+        id="userInput"
+        type="text"
+        placeholder="Ask anything..."
+        class="flex-1 bg-white/10 rounded-xl px-4 py-2 focus:outline-none"
+      />
+      <button id="sendBtn" class="bg-indigo-600 px-4 py-2 rounded-xl font-semibold">
+        Send
+      </button>
+    </div>
+  </main>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+    <div class="glass w-96 max-w-[90%] rounded-lg p-6 space-y-4">
+      <h2 class="text-xl font-bold">Settings</h2>
+
+      <div>
+        <label class="text-sm">OpenRouter API Key</label>
+        <input id="apiKeyInput" type="password"
+          class="w-full mt-1 bg-white/10 rounded px-3 py-2" />
+      </div>
+
+      <div>
+        <label class="text-sm">Model Name</label>
+        <input id="modelInput" type="text"
+          placeholder="google/gemini-pro"
+          class="w-full mt-1 bg-white/10 rounded px-3 py-2" />
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button id="closeSettings" class="px-4 py-2 bg-white/10 rounded">Cancel</button>
+        <button id="saveSettings" class="px-4 py-2 bg-indigo-600 rounded">Save</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const chatArea = document.getElementById("chatArea");
+const chatList = document.getElementById("chatList");
+const userInput = document.getElementById("userInput");
+const menuBtn = document.getElementById("menuBtn");
+const aside = document.querySelector("aside");
+const settingsModal = document.getElementById("settingsModal");
+const apiKeyInput = document.getElementById("apiKeyInput");
+const modelInput = document.getElementById("modelInput");
+
+let chats = JSON.parse(localStorage.getItem("chats") || "{}");
+let activeChatId = localStorage.getItem("activeChatId");
+
+function saveChats() {
+  localStorage.setItem("chats", JSON.stringify(chats));
+  localStorage.setItem("activeChatId", activeChatId);
+}
+
+function createChat() {
+  const id = Date.now().toString();
+  chats[id] = [{ role: "assistant", content: "👋 Welcome! Ask me anything." }];
+  activeChatId = id;
+  saveChats();
+  renderChats();
+  renderMessages();
+}
+
+function renderChats() {
+  chatList.innerHTML = "";
+  Object.keys(chats).forEach(id => {
+    const btn = document.createElement("button");
+    btn.className = "w-full text-left px-3 py-2 rounded hover:bg-white/10 text-sm";
+    btn.textContent = "Chat " + id.slice(-4);
+    btn.onclick = () => {
+      activeChatId = id;
+      saveChats();
+      renderMessages();
     };
+    chatList.appendChild(btn);
+  });
+}
 
-    document.getElementById("sendBtn").onclick = sendMessage;
-    document.getElementById("newChatBtn").onclick = createChat;
-    userInput.addEventListener("keydown", e => {
-      if (e.key === "Enter") sendMessage();
-    });
+function renderMessages() {
+  chatArea.innerHTML = "";
+  chats[activeChatId]?.forEach(msg => {
+    const div = document.createElement("div");
+    div.className = msg.role === "user" ? "text-right" : "text-left";
+    div.innerHTML = `
+      <div class="inline-block max-w-[85%] px-4 py-2 rounded-2xl glass ${
+        msg.role === "user" ? "bg-indigo-500/40" : "bg-white/10"
+      }">${msg.content}</div>`;
+    chatArea.appendChild(div);
+  });
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
 
-    if (!activeChatId) createChat();
-    renderChats();
+/* Typing animation */
+async function typeAssistantMessage(text) {
+  const msg = { role: "assistant", content: "" };
+  chats[activeChatId].push(msg);
+  renderMessages();
+
+  for (let i = 0; i < text.length; i++) {
+    msg.content += text[i];
     renderMessages();
-  </script>
+    await new Promise(r => setTimeout(r, 18));
+  }
+  saveChats();
+}
+
+async function sendMessage() {
+  if (!userInput.value.trim()) return;
+  const content = userInput.value;
+  userInput.value = "";
+
+  chats[activeChatId].push({ role: "user", content });
+  renderMessages();
+  saveChats();
+
+  const apiKey = localStorage.getItem("apiKey");
+  const model = localStorage.getItem("model") || "google/gemini-pro";
+  if (!apiKey) return typeAssistantMessage("⚠️ Set your API key in Settings.");
+
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + apiKey
+    },
+    body: JSON.stringify({ model, messages: chats[activeChatId] })
+  });
+
+  const data = await res.json();
+  await typeAssistantMessage(data.choices?.[0]?.message?.content || "Error");
+}
+
+/* Mobile sidebar toggle */
+menuBtn?.addEventListener("click", () => {
+  aside.classList.remove("hidden");
+  aside.classList.toggle("mobile-hidden");
+  aside.classList.toggle("mobile-visible");
+});
+
+/* Settings */
+function openSettings() {
+  settingsModal.classList.remove("hidden");
+  settingsModal.classList.add("flex");
+  apiKeyInput.value = localStorage.getItem("apiKey") || "";
+  modelInput.value = localStorage.getItem("model") || "";
+}
+document.getElementById("settingsBtn")?.addEventListener("click", openSettings);
+document.getElementById("settingsBtnMobile")?.addEventListener("click", openSettings);
+document.getElementById("closeSettings").onclick = () => settingsModal.classList.add("hidden");
+document.getElementById("saveSettings").onclick = () => {
+  localStorage.setItem("apiKey", apiKeyInput.value.trim());
+  localStorage.setItem("model", modelInput.value.trim());
+  settingsModal.classList.add("hidden");
+};
+
+document.getElementById("sendBtn").onclick = sendMessage;
+document.getElementById("newChatBtn").onclick = createChat;
+userInput.addEventListener("keydown", e => e.key === "Enter" && sendMessage());
+
+if (!activeChatId) createChat();
+renderChats();
+renderMessages();
+</script>
 
 </body>
-          </html>
+</html>
