@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Universal AI Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #555;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-900 text-gray-100 h-screen flex overflow-hidden">
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
+    <div class="p-4 text-lg font-bold border-b border-gray-700 flex justify-between items-center">
+      Chats
+      <button id="newChatBtn" class="text-sm bg-indigo-600 px-2 py-1 rounded hover:bg-indigo-500">
+        +
+      </button>
+    </div>
+
+    <div id="chatList" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
+
+    <button id="settingsBtn" class="m-3 bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded text-sm">
+      ⚙ Settings
+    </button>
+  </aside>
+
+  <!-- Main Chat Area -->
+  <main class="flex-1 flex flex-col">
+    <div id="chatArea" class="flex-1 overflow-y-auto p-6 space-y-4"></div>
+
+    <div class="border-t border-gray-700 p-4 flex gap-2">
+      <input
+        id="userInput"
+        type="text"
+        placeholder="Ask anything..."
+        class="flex-1 bg-gray-800 border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      />
+      <button
+        id="sendBtn"
+        class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded font-semibold"
+      >
+        Send
+      </button>
+    </div>
+  </main>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center">
+    <div class="bg-gray-800 w-96 rounded-lg p-6 space-y-4">
+      <h2 class="text-xl font-bold">Settings</h2>
+
+      <div>
+        <label class="text-sm text-gray-300">OpenRouter API Key</label>
+        <input
+          id="apiKeyInput"
+          type="password"
+          class="w-full mt-1 bg-gray-700 border border-gray-600 rounded px-3 py-2"
+        />
+      </div>
+
+      <div>
+        <label class="text-sm text-gray-300">Model Name</label>
+        <input
+          id="modelInput"
+          type="text"
+          placeholder="google/gemini-pro"
+          class="w-full mt-1 bg-gray-700 border border-gray-600 rounded px-3 py-2"
+        />
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button id="closeSettings" class="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+          Cancel
+        </button>
+        <button id="saveSettings" class="px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-500">
+          Save
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ SCRIPT AT END OF BODY (NO BLANK PAGE ISSUES) -->
+  <script>
+    const chatArea = document.getElementById("chatArea");
+    const chatList = document.getElementById("chatList");
+    const userInput = document.getElementById("userInput");
+
+    let chats = JSON.parse(localStorage.getItem("chats") || "{}");
+    let activeChatId = localStorage.getItem("activeChatId");
+
+    function saveChats() {
+      localStorage.setItem("chats", JSON.stringify(chats));
+      localStorage.setItem("activeChatId", activeChatId);
+    }
+
+    function createChat() {
+      const id = Date.now().toString();
+      chats[id] = [];
+      activeChatId = id;
+      saveChats();
+      renderChats();
+      renderMessages();
+    }
+
+    function renderChats() {
+      chatList.innerHTML = "";
+      Object.keys(chats).forEach(id => {
+        const btn = document.createElement("button");
+        btn.className = "w-full text-left px-3 py-2 rounded hover:bg-gray-700 text-sm";
+        btn.textContent = "Chat " + id.slice(-4);
+        btn.onclick = () => {
+          activeChatId = id;
+          saveChats();
+          renderMessages();
+        };
+        chatList.appendChild(btn);
+      });
+    }
+
+    function renderMessages() {
+      chatArea.innerHTML = "";
+      if (!activeChatId) return;
+
+      chats[activeChatId].forEach(msg => {
+        const div = document.createElement("div");
+        div.className = msg.role === "user"
+          ? "text-right"
+          : "text-left";
+
+        div.innerHTML = `
+          <div class="inline-block max-w-xl px-4 py-2 rounded-lg ${
+            msg.role === "user"
+              ? "bg-indigo-600"
+              : "bg-gray-700"
+          }">
+            ${msg.content}
+          </div>
+        `;
+        chatArea.appendChild(div);
+      });
+
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    async function sendMessage() {
+      if (!userInput.value.trim() || !activeChatId) return;
+
+      const content = userInput.value;
+      userInput.value = "";
+
+      chats[activeChatId].push({ role: "user", content });
+      renderMessages();
+      saveChats();
+
+      const apiKey = localStorage.getItem("apiKey");
+      const model = localStorage.getItem("model") || "google/gemini-pro";
+
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + apiKey
+        },
+        body: JSON.stringify({
+          model,
+          messages: chats[activeChatId]
+        })
+      });
+
+      const data = await response.json();
+      const reply = data.choices?.[0]?.message?.content || "Error";
+
+      chats[activeChatId].push({ role: "assistant", content: reply });
+      renderMessages();
+      saveChats();
+    }
+
+    // Settings
+    const settingsModal = document.getElementById("settingsModal");
+    document.getElementById("settingsBtn").onclick = () => {
+      settingsModal.classList.remove("hidden");
+      settingsModal.classList.add("flex");
+      document.getElementById("apiKeyInput").value = localStorage.getItem("apiKey") || "";
+      document.getElementById("modelInput").value = localStorage.getItem("model") || "";
+    };
+
+    document.getElementById("closeSettings").onclick = () => {
+      settingsModal.classList.add("hidden");
+    };
+
+    document.getElementById("saveSettings").onclick = () => {
+      localStorage.setItem("apiKey", document.getElementById("apiKeyInput").value);
+      localStorage.setItem("model", document.getElementById("modelInput").value);
+      settingsModal.classList.add("hidden");
+    };
+
+    document.getElementById("sendBtn").onclick = sendMessage;
+    document.getElementById("newChatBtn").onclick = createChat;
+
+    userInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") sendMessage();
+    });
+
+    // Init
+    if (!activeChatId) createChat();
+    renderChats();
+    renderMessages();
+  </script>
+
+</body>
+</html>
