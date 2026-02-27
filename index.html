@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <title>Dragger AI Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- ✅ PWA Manifest -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#4f46e5" />
+
   <script src="https://cdn.tailwindcss.com"></script>
 
   <style>
@@ -11,7 +16,7 @@
     ::-webkit-scrollbar-thumb { background: #555; border-radius: 6px; }
 
     .app-bg {
-      background-image: url("wallpaper.jpeg");
+      background-image: url("wallpaper.jpg");
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
@@ -34,7 +39,6 @@
 
 <div class="h-[100dvh] flex overflow-x-hidden app-overlay">
 
-  <!-- Sidebar -->
   <aside id="sidebar"
     class="fixed md:static top-0 left-0 h-full w-64 glass flex flex-col z-40
            -translate-x-full md:translate-x-0 transition-transform duration-300">
@@ -51,7 +55,6 @@
     </button>
   </aside>
 
-  <!-- Main -->
   <main class="flex-1 flex flex-col min-h-0">
 
     <div class="md:hidden flex items-center justify-between px-4 py-3 border-b border-white/10 glass">
@@ -75,7 +78,6 @@
     </div>
   </main>
 
-  <!-- Settings Modal -->
   <div id="settingsModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
     <div class="glass w-96 max-w-[90%] rounded-lg p-6 space-y-4">
       <h2 class="text-xl font-bold">Settings</h2>
@@ -159,20 +161,6 @@ function renderMessages() {
   chatArea.scrollTop = chatArea.scrollHeight;
 }
 
-async function typeAssistantMessage(text) {
-  const msg = { role: "assistant", content: "" };
-  chats[activeChatId].push(msg);
-  renderMessages();
-
-  for (let i = 0; i < text.length; i++) {
-    msg.content += text[i];
-    renderMessages();
-    await new Promise(r => setTimeout(r, 18));
-  }
-  saveChats();
-}
-
-/* ✅ SAFE API VERSION */
 async function sendMessage() {
   if (!userInput.value.trim()) return;
 
@@ -186,9 +174,7 @@ async function sendMessage() {
   const apiKey = localStorage.getItem("apiKey");
   const model = localStorage.getItem("model") || "google/gemini-pro";
 
-  if (!apiKey) {
-    return typeAssistantMessage("⚠️ Set your API key in Settings.");
-  }
+  if (!apiKey) return;
 
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -197,21 +183,16 @@ async function sendMessage() {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + apiKey
       },
-      body: JSON.stringify({
-        model,
-        messages: chats[activeChatId]
-      })
+      body: JSON.stringify({ model, messages: chats[activeChatId] })
     });
-
-    if (!res.ok) throw new Error("API Error");
 
     const data = await res.json();
     const reply = data.choices?.[0]?.message?.content || "No response";
-    await typeAssistantMessage(reply);
-
-  } catch (error) {
-    console.error(error);
-    await typeAssistantMessage("❌ Failed to get response. Check API key or internet.");
+    chats[activeChatId].push({ role: "assistant", content: reply });
+    renderMessages();
+    saveChats();
+  } catch (err) {
+    console.log(err);
   }
 }
 
@@ -220,27 +201,18 @@ menuBtn?.addEventListener("click", () => {
 });
 
 document.getElementById("sendBtn").addEventListener("click", sendMessage);
-userInput.addEventListener("keydown", (e) => {
+userInput.addEventListener("keydown", e => {
   if (e.key === "Enter") sendMessage();
 });
 
-function openSettings() {
-  settingsModal.classList.remove("hidden");
-  settingsModal.classList.add("flex");
-  apiKeyInput.value = localStorage.getItem("apiKey") || "";
-  modelInput.value = localStorage.getItem("model") || "";
+/* ✅ PWA Service Worker Registration */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js")
+      .then(() => console.log("Service Worker Registered"))
+      .catch(err => console.log("SW registration failed:", err));
+  });
 }
-
-document.getElementById("settingsBtn")?.addEventListener("click", openSettings);
-document.getElementById("settingsBtnMobile")?.addEventListener("click", openSettings);
-document.getElementById("closeSettings").onclick = () => settingsModal.classList.add("hidden");
-document.getElementById("saveSettings").onclick = () => {
-  localStorage.setItem("apiKey", apiKeyInput.value.trim());
-  localStorage.setItem("model", modelInput.value.trim());
-  settingsModal.classList.add("hidden");
-};
-
-document.getElementById("newChatBtn").onclick = createChat;
 
 if (!activeChatId) createChat();
 renderChats();
@@ -248,4 +220,4 @@ renderMessages();
 </script>
 
 </body>
-</html>
+  </html>
