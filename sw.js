@@ -1,4 +1,4 @@
-const CACHE_NAME = "dragger-ai-v3";
+const CACHE_NAME = "dragger-ai-v10";
 
 const urlsToCache = [
   "./",
