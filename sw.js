@@ -1,9 +1,10 @@
-const CACHE_NAME = "dragger-ai-v11";
+const CACHE_NAME = "dragger-ai-v12";
 
 const urlsToCache = [
   "./",
   "./index.html",
   "./manifest.json",
+  "./wallpaper.jpeg",
   "./icon-192.png",
   "./icon-512.png"
 ];
@@ -32,6 +33,9 @@ self.addEventListener("activate", event => {
 });
 
 self.addEventListener("fetch", event => {
+  // Don't intercept OpenRouter API calls
+  if (event.request.url.includes("openrouter.ai")) return;
+
   event.respondWith(
     fetch(event.request)
       .then(response => response)
