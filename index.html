@@ -583,4 +583,155 @@ const MODELS = [
   {
     group: "DeepSeek",
     models: [
-      { name: "DeepSeek Chat V3",       id: "deepseek/de
+      { name: "DeepSeek Chat V3",       id: "deepseek/deepseek-chat-v3-0324",       tags: ["powerful"] },
+      { name: "DeepSeek R1",            id: "deepseek/deepseek-r1",                 tags: ["powerful"] },
+      { name: "DeepSeek R1 (free)",     id: "deepseek/deepseek-r1:free",            tags: ["free"] },
+    ]
+  },
+  {
+    group: "xAI",
+    models: [
+      { name: "Grok 3",                 id: "x-ai/grok-3",                          tags: ["powerful"] },
+      { name: "Grok 3 Mini",            id: "x-ai/grok-3-mini",                     tags: ["fast"] },
+    ]
+  },
+];
+
+let selectedModel = localStorage.getItem("model") || "google/gemini-2.0-flash-001";
+
+function buildModelList(filter = "") {
+  const list = document.getElementById("modelList");
+  list.innerHTML = "";
+  const q = filter.toLowerCase();
+
+  MODELS.forEach(group => {
+    const filtered = group.models.filter(m =>
+      m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
+    );
+    if (!filtered.length) return;
+
+    const label = document.createElement("div");
+    label.className = "model-group-label";
+    label.textContent = group.group;
+    list.appendChild(label);
+
+    filtered.forEach(m => {
+      const el = document.createElement("div");
+      el.className = "model-option" + (m.id === selectedModel ? " selected" : "");
+      el.innerHTML = `
+        <span class="model-name">${m.name}</span>
+        <span class="model-id">${m.id}</span>
+        <span>${m.tags.map(t => `<span class="model-tag tag-${t}">${t}</span>`).join(" ")}</span>
+      `;
+      el.onclick = () => {
+        selectedModel = m.id;
+        document.getElementById("modelInput").value = "";
+        document.getElementById("selectedModelDisplay").textContent = m.id;
+        buildModelList(document.getElementById("modelSearch").value);
+      };
+      list.appendChild(el);
+    });
+  });
+
+  if (!list.children.length) {
+    list.innerHTML = `<div class="p-3 text-sm text-gray-400">No models found. Use custom model below.</div>`;
+  }
+}
+
+document.getElementById("modelSearch").addEventListener("input", e => {
+  buildModelList(e.target.value);
+});
+
+/* ---- Settings ---- */
+function openSettings() {
+  apiKeyInput.value = localStorage.getItem("apiKey") || "";
+  selectedModel     = localStorage.getItem("model")  || "google/gemini-2.0-flash-001";
+  document.getElementById("modelInput").value = "";
+  document.getElementById("selectedModelDisplay").textContent = selectedModel;
+  buildModelList();
+  // Scroll selected model into view
+  setTimeout(() => {
+    const sel = document.querySelector(".model-option.selected");
+    if (sel) sel.scrollIntoView({ block: "center" });
+  }, 50);
+  settingsModal.classList.remove("hidden");
+  settingsModal.classList.add("flex");
+}
+function closeSettingsModal() {
+  settingsModal.classList.remove("flex");
+  settingsModal.classList.add("hidden");
+}
+
+document.getElementById("settingsBtn").onclick       = openSettings;
+document.getElementById("settingsBtnMobile").onclick = openSettings;
+document.getElementById("closeSettings").onclick     = closeSettingsModal;
+document.getElementById("saveSettings").onclick = () => {
+  // Custom model input overrides picker if filled in
+  const custom = document.getElementById("modelInput").value.trim();
+  const finalModel = custom || selectedModel;
+  localStorage.setItem("apiKey", apiKeyInput.value.trim());
+  localStorage.setItem("model",  finalModel);
+  closeSettingsModal();
+  fetchCredits(); // Refresh credits after saving new API key
+};
+
+settingsModal.addEventListener("click", e => {
+  if (!settingsPanel.contains(e.target)) closeSettingsModal();
+});
+
+/* ========= API CREDITS ========= */
+async function fetchCredits() {
+  const apiKey = localStorage.getItem("apiKey");
+  const display = document.getElementById("creditsDisplay");
+  const subtext = document.getElementById("creditsSubtext");
+
+  if (!apiKey) {
+    display.textContent = "—";
+    subtext.textContent = "Set API key to load";
+    return;
+  }
+
+  display.textContent = "Loading…";
+  subtext.textContent = "";
+
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/credits", {
+      headers: { "Authorization": "Bearer " + apiKey }
+    });
+    if (!res.ok) throw new Error("API error " + res.status);
+    const data = await res.json();
+
+    // OpenRouter returns { data: { total_credits, usage } }
+    const total = data?.data?.total_credits ?? null;
+    const used  = data?.data?.usage         ?? null;
+    const remaining = (total !== null && used !== null) ? (total - used) : null;
+
+    if (remaining !== null) {
+      display.textContent = "$" + remaining.toFixed(4);
+      subtext.textContent = `$${used.toFixed(4)} used of $${total.toFixed(4)}`;
+    } else {
+      display.textContent = "—";
+      subtext.textContent = "Could not parse balance";
+    }
+  } catch (err) {
+    display.textContent = "Error";
+    subtext.textContent = err.message;
+  }
+}
+
+document.getElementById("refreshCreditsBtn").addEventListener("click", fetchCredits);
+
+// Auto-fetch credits when page loads if API key exists
+window.addEventListener("load", () => {
+  if (localStorage.getItem("apiKey")) fetchCredits();
+});
+
+/* ========= PWA — FIX 1: wait for load event ========= */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").then(reg => reg.update()).catch(() => {});
+  });
+}
+</script>
+</body>
+          </html>
