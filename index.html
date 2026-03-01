@@ -116,7 +116,7 @@
 </div>
 
 <script>
-/* ===== DOM ===== */
+/* ========= DOM ========= */
 const chatArea = document.getElementById("chatArea");
 const chatList = document.getElementById("chatList");
 const userInput = document.getElementById("userInput");
@@ -126,26 +126,26 @@ const settingsModal = document.getElementById("settingsModal");
 const apiKeyInput = document.getElementById("apiKeyInput");
 const modelInput = document.getElementById("modelInput");
 
-/* ===== STATE ===== */
+/* ========= STATE ========= */
 let chats = JSON.parse(localStorage.getItem("chats") || "{}");
 let activeChatId = localStorage.getItem("activeChatId");
 
-/* ===== STORAGE ===== */
+/* ✅ HARD SAFETY FIX */
+if (!activeChatId || !chats[activeChatId]) {
+  const id = Date.now().toString();
+  chats[id] = [{ role: "assistant", content: "👋 Welcome! Ask me anything." }];
+  activeChatId = id;
+  localStorage.setItem("chats", JSON.stringify(chats));
+  localStorage.setItem("activeChatId", activeChatId);
+}
+
+/* ========= HELPERS ========= */
 function saveChats() {
   localStorage.setItem("chats", JSON.stringify(chats));
   localStorage.setItem("activeChatId", activeChatId);
 }
 
-/* ===== CHAT ===== */
-function createChat() {
-  const id = Date.now().toString();
-  chats[id] = [{ role: "assistant", content: "👋 Welcome! Ask me anything." }];
-  activeChatId = id;
-  saveChats();
-  renderChats();
-  renderMessages();
-}
-
+/* ========= CHAT ========= */
 function renderChats() {
   chatList.innerHTML = "";
   Object.keys(chats).forEach(id => {
@@ -164,7 +164,7 @@ function renderChats() {
 
 function renderMessages() {
   chatArea.innerHTML = "";
-  chats[activeChatId]?.forEach(msg => {
+  chats[activeChatId].forEach(msg => {
     const div = document.createElement("div");
     div.className = msg.role === "user" ? "text-right" : "text-left";
     div.innerHTML = `
@@ -176,14 +176,14 @@ function renderMessages() {
   chatArea.scrollTop = chatArea.scrollHeight;
 }
 
-/* ===== Typing animation ===== */
+/* ========= Typing ========= */
 async function typeAssistantMessage(text) {
   const msg = { role: "assistant", content: "" };
   chats[activeChatId].push(msg);
   renderMessages();
 
-  for (let i = 0; i < text.length; i++) {
-    msg.content += text[i];
+  for (let c of text) {
+    msg.content += c;
     renderMessages();
     await new Promise(r => setTimeout(r, 16));
   }
@@ -195,6 +195,7 @@ async function sendMessage() {
 
   const content = userInput.value;
   userInput.value = "";
+
   chats[activeChatId].push({ role: "user", content });
   renderMessages();
   saveChats();
@@ -218,18 +219,18 @@ async function sendMessage() {
   await typeAssistantMessage(data.choices?.[0]?.message?.content || "No response");
 }
 
-/* ===== Sidebar ===== */
-menuBtn?.addEventListener("click", () => {
+/* ========= UI ========= */
+menuBtn.addEventListener("click", () => {
   sidebar.classList.toggle("-translate-x-full");
 });
 
-/* ===== Settings ===== */
 function openSettings() {
   settingsModal.classList.remove("hidden");
   settingsModal.classList.add("flex");
   apiKeyInput.value = localStorage.getItem("apiKey") || "";
   modelInput.value = localStorage.getItem("model") || "";
 }
+
 document.getElementById("settingsBtn").onclick = openSettings;
 document.getElementById("settingsBtnMobile").onclick = openSettings;
 document.getElementById("closeSettings").onclick = () =>
@@ -240,23 +241,21 @@ document.getElementById("saveSettings").onclick = () => {
   settingsModal.classList.add("hidden");
 };
 
-/* ===== Events ===== */
 document.getElementById("sendBtn").onclick = sendMessage;
-document.getElementById("newChatBtn").onclick = createChat;
+document.getElementById("newChatBtn").onclick = () => location.reload();
 userInput.addEventListener("keydown", e => e.key === "Enter" && sendMessage());
 
-/* ===== PWA SW ===== */
+/* ========= FORCE PWA UPDATE ========= */
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js");
+  navigator.serviceWorker.register("sw.js").then(reg => {
+    reg.update();
   });
 }
 
 /* Init */
-if (!activeChatId) createChat();
 renderChats();
 renderMessages();
 </script>
 
 </body>
-  </html>
+        </html>
