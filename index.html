@@ -81,6 +81,38 @@
       color: #e0e7ff;
     }
 
+    /* Model picker */
+    .model-group-label {
+      padding: 6px 10px 2px;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #818cf8;
+      font-weight: 700;
+    }
+    .model-option {
+      display: flex;
+      flex-direction: column;
+      padding: 7px 12px;
+      cursor: pointer;
+      transition: background 0.12s;
+      border-left: 2px solid transparent;
+    }
+    .model-option:hover { background: rgba(99,102,241,0.18); }
+    .model-option.selected {
+      background: rgba(99,102,241,0.28);
+      border-left-color: #818cf8;
+    }
+    .model-option .model-name { font-weight: 500; color: #e0e7ff; }
+    .model-option .model-id   { font-size: 0.7rem; color: #9ca3af; font-family: monospace; }
+    .model-option .model-tag  {
+      font-size: 0.6rem; padding: 1px 5px; border-radius: 99px;
+      display: inline-block; margin-top: 2px; font-weight: 600;
+    }
+    .tag-free    { background: rgba(34,197,94,0.2);  color: #86efac; }
+    .tag-fast    { background: rgba(251,191,36,0.2); color: #fde68a; }
+    .tag-powerful{ background: rgba(167,139,250,0.2);color: #c4b5fd; }
+
     /* Delete button on chat items */
     .chat-item-wrap:hover .delete-chat-btn { opacity: 1; }
     .delete-chat-btn {
@@ -156,10 +188,32 @@
       </div>
 
       <div>
-        <label class="text-sm text-gray-300">Model Name</label>
-        <input id="modelInput" type="text"
-          placeholder="google/gemini-pro"
-          class="w-full mt-1 bg-white/10 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+        <label class="text-sm text-gray-300">AI Model</label>
+
+        <!-- Search box -->
+        <input id="modelSearch" type="text" placeholder="Search models..."
+          class="w-full mt-1 mb-2 bg-white/10 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-400 text-sm" />
+
+        <!-- Model list -->
+        <div id="modelList"
+          class="w-full bg-black/30 rounded border border-white/10 max-h-48 overflow-y-auto text-sm">
+        </div>
+
+        <!-- Currently selected display -->
+        <div class="mt-2 flex items-center gap-2">
+          <span class="text-xs text-gray-400">Selected:</span>
+          <span id="selectedModelDisplay" class="text-xs text-indigo-300 font-mono truncate"></span>
+        </div>
+
+        <!-- Custom model input -->
+        <details class="mt-2">
+          <summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-200 transition-colors">
+            Use a custom model ID instead
+          </summary>
+          <input id="modelInput" type="text"
+            placeholder="e.g. mistralai/mistral-7b-instruct"
+            class="w-full mt-1 bg-white/10 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-400 text-sm" />
+        </details>
       </div>
 
       <div class="flex justify-end gap-2">
@@ -187,7 +241,6 @@ const sidebar       = document.getElementById("sidebar");
 const settingsModal = document.getElementById("settingsModal");
 const settingsPanel = document.getElementById("settingsPanel");
 const apiKeyInput   = document.getElementById("apiKeyInput");
-const modelInput    = document.getElementById("modelInput");
 
 /* ========= STATE ========= */
 let chats        = JSON.parse(localStorage.getItem("chats") || "{}");
@@ -441,10 +494,122 @@ userInput.addEventListener("keydown", e => {
 });
 sendBtn.addEventListener("click", sendMessage);
 
+/* ========= MODEL PICKER ========= */
+const MODELS = [
+  {
+    group: "Google",
+    models: [
+      { name: "Gemini 2.0 Flash",      id: "google/gemini-2.0-flash-001",          tags: ["fast"] },
+      { name: "Gemini 2.5 Pro",         id: "google/gemini-2.5-pro-preview-03-25",  tags: ["powerful"] },
+      { name: "Gemini Flash 1.5 8B",    id: "google/gemini-flash-1.5-8b",           tags: ["free","fast"] },
+    ]
+  },
+  {
+    group: "OpenAI",
+    models: [
+      { name: "GPT-4o",                 id: "openai/gpt-4o",                        tags: ["powerful"] },
+      { name: "GPT-4o Mini",            id: "openai/gpt-4o-mini",                   tags: ["fast"] },
+      { name: "o3 Mini",                id: "openai/o3-mini",                       tags: ["powerful"] },
+    ]
+  },
+  {
+    group: "Anthropic",
+    models: [
+      { name: "Claude 3.5 Sonnet",      id: "anthropic/claude-3-5-sonnet",          tags: ["powerful"] },
+      { name: "Claude 3.5 Haiku",       id: "anthropic/claude-3-5-haiku",           tags: ["fast"] },
+      { name: "Claude 3 Opus",          id: "anthropic/claude-3-opus",              tags: ["powerful"] },
+    ]
+  },
+  {
+    group: "Meta",
+    models: [
+      { name: "Llama 3.3 70B",          id: "meta-llama/llama-3.3-70b-instruct",    tags: ["free","fast"] },
+      { name: "Llama 3.1 8B",           id: "meta-llama/llama-3.1-8b-instruct",     tags: ["free","fast"] },
+      { name: "Llama 4 Maverick",       id: "meta-llama/llama-4-maverick",          tags: ["powerful"] },
+    ]
+  },
+  {
+    group: "Mistral",
+    models: [
+      { name: "Mistral 7B Instruct",    id: "mistralai/mistral-7b-instruct",        tags: ["free","fast"] },
+      { name: "Mixtral 8x7B",           id: "mistralai/mixtral-8x7b-instruct",      tags: ["fast"] },
+      { name: "Mistral Large",          id: "mistralai/mistral-large",              tags: ["powerful"] },
+    ]
+  },
+  {
+    group: "DeepSeek",
+    models: [
+      { name: "DeepSeek Chat V3",       id: "deepseek/deepseek-chat-v3-0324",       tags: ["powerful"] },
+      { name: "DeepSeek R1",            id: "deepseek/deepseek-r1",                 tags: ["powerful"] },
+      { name: "DeepSeek R1 (free)",     id: "deepseek/deepseek-r1:free",            tags: ["free"] },
+    ]
+  },
+  {
+    group: "xAI",
+    models: [
+      { name: "Grok 3",                 id: "x-ai/grok-3",                          tags: ["powerful"] },
+      { name: "Grok 3 Mini",            id: "x-ai/grok-3-mini",                     tags: ["fast"] },
+    ]
+  },
+];
+
+let selectedModel = localStorage.getItem("model") || "google/gemini-2.0-flash-001";
+
+function buildModelList(filter = "") {
+  const list = document.getElementById("modelList");
+  list.innerHTML = "";
+  const q = filter.toLowerCase();
+
+  MODELS.forEach(group => {
+    const filtered = group.models.filter(m =>
+      m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
+    );
+    if (!filtered.length) return;
+
+    const label = document.createElement("div");
+    label.className = "model-group-label";
+    label.textContent = group.group;
+    list.appendChild(label);
+
+    filtered.forEach(m => {
+      const el = document.createElement("div");
+      el.className = "model-option" + (m.id === selectedModel ? " selected" : "");
+      el.innerHTML = `
+        <span class="model-name">${m.name}</span>
+        <span class="model-id">${m.id}</span>
+        <span>${m.tags.map(t => `<span class="model-tag tag-${t}">${t}</span>`).join(" ")}</span>
+      `;
+      el.onclick = () => {
+        selectedModel = m.id;
+        document.getElementById("modelInput").value = "";
+        document.getElementById("selectedModelDisplay").textContent = m.id;
+        buildModelList(document.getElementById("modelSearch").value);
+      };
+      list.appendChild(el);
+    });
+  });
+
+  if (!list.children.length) {
+    list.innerHTML = `<div class="p-3 text-sm text-gray-400">No models found. Use custom model below.</div>`;
+  }
+}
+
+document.getElementById("modelSearch").addEventListener("input", e => {
+  buildModelList(e.target.value);
+});
+
 /* ---- Settings ---- */
 function openSettings() {
   apiKeyInput.value = localStorage.getItem("apiKey") || "";
-  modelInput.value  = localStorage.getItem("model")  || "";
+  selectedModel     = localStorage.getItem("model")  || "google/gemini-2.0-flash-001";
+  document.getElementById("modelInput").value = "";
+  document.getElementById("selectedModelDisplay").textContent = selectedModel;
+  buildModelList();
+  // Scroll selected model into view
+  setTimeout(() => {
+    const sel = document.querySelector(".model-option.selected");
+    if (sel) sel.scrollIntoView({ block: "center" });
+  }, 50);
   settingsModal.classList.remove("hidden");
   settingsModal.classList.add("flex");
 }
@@ -457,8 +622,11 @@ document.getElementById("settingsBtn").onclick       = openSettings;
 document.getElementById("settingsBtnMobile").onclick = openSettings;
 document.getElementById("closeSettings").onclick     = closeSettingsModal;
 document.getElementById("saveSettings").onclick = () => {
+  // Custom model input overrides picker if filled in
+  const custom = document.getElementById("modelInput").value.trim();
+  const finalModel = custom || selectedModel;
   localStorage.setItem("apiKey", apiKeyInput.value.trim());
-  localStorage.setItem("model",  modelInput.value.trim());
+  localStorage.setItem("model",  finalModel);
   closeSettingsModal();
 };
 
