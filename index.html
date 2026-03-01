@@ -7,6 +7,8 @@
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#4f46e5" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FIX 3: Markdown renderer -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-thumb { background: #555; border-radius: 6px; }
@@ -47,6 +49,44 @@
 
     /* Active chat highlight */
     .chat-item.active { background: rgba(99,102,241,0.35); }
+
+    /* FIX 3: Markdown styles inside AI bubbles */
+    .ai-bubble p { margin-bottom: 0.5em; }
+    .ai-bubble p:last-child { margin-bottom: 0; }
+    .ai-bubble ul, .ai-bubble ol { padding-left: 1.25em; margin-bottom: 0.5em; }
+    .ai-bubble li { margin-bottom: 0.2em; }
+    .ai-bubble code {
+      background: rgba(255,255,255,0.15);
+      padding: 0.1em 0.4em;
+      border-radius: 4px;
+      font-size: 0.85em;
+      font-family: monospace;
+    }
+    .ai-bubble pre {
+      background: rgba(0,0,0,0.35);
+      border-radius: 8px;
+      padding: 0.75em 1em;
+      overflow-x: auto;
+      margin: 0.5em 0;
+    }
+    .ai-bubble pre code {
+      background: none;
+      padding: 0;
+      font-size: 0.82em;
+    }
+    .ai-bubble strong { color: #c7d2fe; }
+    .ai-bubble h1, .ai-bubble h2, .ai-bubble h3 {
+      font-weight: 700;
+      margin: 0.5em 0 0.25em;
+      color: #e0e7ff;
+    }
+
+    /* Delete button on chat items */
+    .chat-item-wrap:hover .delete-chat-btn { opacity: 1; }
+    .delete-chat-btn {
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
   </style>
 </head>
 
@@ -91,6 +131,7 @@
         id="userInput"
         type="text"
         placeholder="Ask anything..."
+        maxlength="4000"
         class="flex-1 bg-white/10 rounded-xl px-4 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
         autocomplete="off"
       />
@@ -133,6 +174,9 @@
 </div>
 
 <script>
+/* ========= MARKED CONFIG ========= */
+marked.setOptions({ breaks: true, gfm: true });
+
 /* ========= DOM ========= */
 const chatArea      = document.getElementById("chatArea");
 const chatList      = document.getElementById("chatList");
@@ -164,7 +208,7 @@ function saveChats() {
   localStorage.setItem("activeChatId", activeChatId);
 }
 
-/** Safely escape user/AI content to prevent XSS */
+/** Safely escape user content to prevent XSS */
 function escapeHtml(text) {
   return text
     .replace(/&/g, "&amp;")
@@ -197,24 +241,56 @@ function switchChat(id) {
   closeSidebar();
 }
 
+// FIX 4: Delete a chat
+function deleteChat(id) {
+  delete chats[id];
+  // If we deleted the active chat, switch to another or create new
+  if (activeChatId === id) {
+    const remaining = Object.keys(chats);
+    if (remaining.length > 0) {
+      activeChatId = remaining[remaining.length - 1];
+    } else {
+      createNewChat();
+      return;
+    }
+  }
+  saveChats();
+  renderChats();
+  renderMessages();
+}
+
 function renderChats() {
   chatList.innerHTML = "";
-  // Show newest first
   const ids = Object.keys(chats).sort((a, b) => b - a);
   ids.forEach(id => {
+    // FIX 4: Wrap in a relative div for delete button
+    const wrap = document.createElement("div");
+    wrap.className = "chat-item-wrap relative flex items-center group";
+
     const btn = document.createElement("button");
-    btn.className = "chat-item w-full text-left px-3 py-2 rounded hover:bg-white/10 text-sm truncate transition-colors" +
+    btn.className = "chat-item flex-1 text-left px-3 py-2 rounded hover:bg-white/10 text-sm truncate transition-colors pr-8" +
                     (id === activeChatId ? " active" : "");
 
-    // Use first user message as title, fallback to timestamp
     const firstUser = chats[id].find(m => m.role === "user");
     btn.textContent = firstUser
       ? firstUser.content.slice(0, 30) + (firstUser.content.length > 30 ? "…" : "")
       : "New Chat";
     btn.title = btn.textContent;
-
     btn.onclick = () => switchChat(id);
-    chatList.appendChild(btn);
+
+    // FIX 4: Delete button
+    const delBtn = document.createElement("button");
+    delBtn.className = "delete-chat-btn absolute right-2 text-gray-400 hover:text-red-400 text-xs px-1 py-0.5 rounded transition-colors";
+    delBtn.textContent = "✕";
+    delBtn.title = "Delete chat";
+    delBtn.onclick = (e) => {
+      e.stopPropagation();
+      deleteChat(id);
+    };
+
+    wrap.appendChild(btn);
+    wrap.appendChild(delBtn);
+    chatList.appendChild(wrap);
   });
 }
 
@@ -228,10 +304,18 @@ function renderMessages() {
 function appendMessageEl(role, content) {
   const wrap = document.createElement("div");
   wrap.className = role === "user" ? "text-right" : "text-left";
-  wrap.innerHTML = `
-    <div class="inline-block max-w-[85%] px-4 py-2 rounded-2xl glass text-sm leading-relaxed ${
-      role === "user" ? "bg-indigo-500/40" : "bg-white/10"
-    }">${escapeHtml(content)}</div>`;
+
+  const bubble = document.createElement("div");
+  bubble.className = `inline-block max-w-[85%] px-4 py-2 rounded-2xl glass text-sm leading-relaxed ${
+    role === "user" ? "bg-indigo-500/40" : "bg-white/10 ai-bubble"
+  }`;
+
+  // FIX 3: Render markdown for AI, escape HTML for user
+  bubble.innerHTML = role === "assistant"
+    ? marked.parse(content)
+    : escapeHtml(content);
+
+  wrap.appendChild(bubble);
   chatArea.appendChild(wrap);
   return wrap;
 }
@@ -254,21 +338,21 @@ function removeTypingIndicator() {
 
 /* ========= STREAMING TYPE EFFECT ========= */
 async function typeAssistantMessage(text) {
-  // Add empty message to history
   const msg = { role: "assistant", content: "" };
   chats[activeChatId].push(msg);
 
-  // Create the bubble once — update it in place
   const wrap = document.createElement("div");
   wrap.className = "text-left";
   const bubble = document.createElement("div");
-  bubble.className = "inline-block max-w-[85%] px-4 py-2 rounded-2xl glass bg-white/10 text-sm leading-relaxed";
+  // FIX 3: add ai-bubble class for markdown styles
+  bubble.className = "inline-block max-w-[85%] px-4 py-2 rounded-2xl glass bg-white/10 text-sm leading-relaxed ai-bubble";
   wrap.appendChild(bubble);
   chatArea.appendChild(wrap);
 
   for (const char of text) {
     msg.content += char;
-    bubble.innerHTML = escapeHtml(msg.content);
+    // FIX 3: Render markdown while typing
+    bubble.innerHTML = marked.parse(msg.content);
     chatArea.scrollTop = chatArea.scrollHeight;
     await new Promise(r => setTimeout(r, 14));
   }
@@ -291,11 +375,9 @@ async function sendMessage() {
   setInputLocked(true);
   closeSidebar();
 
-  // Add user message
   chats[activeChatId].push({ role: "user", content });
   appendMessageEl("user", content);
   chatArea.scrollTop = chatArea.scrollHeight;
-  // Update sidebar title from first user message
   renderChats();
   saveChats();
 
@@ -319,7 +401,6 @@ async function sendMessage() {
       },
       body: JSON.stringify({
         model,
-        // Send only role+content pairs, strip any UI-only fields
         messages: chats[activeChatId].map(({ role, content }) => ({ role, content }))
       })
     });
@@ -381,14 +462,15 @@ document.getElementById("saveSettings").onclick = () => {
   closeSettingsModal();
 };
 
-// Close modal when clicking the backdrop (not the panel)
 settingsModal.addEventListener("click", e => {
   if (!settingsPanel.contains(e.target)) closeSettingsModal();
 });
 
-/* ========= PWA ========= */
+/* ========= PWA — FIX 1: wait for load event ========= */
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("sw.js").then(reg => reg.update()).catch(() => {});
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").then(reg => reg.update()).catch(() => {});
+  });
 }
 </script>
 </body>
