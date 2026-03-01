@@ -1,11 +1,11 @@
-const CACHE_NAME = "dragger-ai-v10";
+const CACHE_NAME = "dragger-ai-v11";
 
 const urlsToCache = [
   "./",
   "./index.html",
-  "./style.css",
-  "./script.js",
-  "./manifest.json"
+  "./manifest.json",
+  "./icon-192.png",
+  "./icon-512.png"
 ];
 
 self.addEventListener("install", event => {
@@ -34,11 +34,7 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   event.respondWith(
     fetch(event.request)
-      .then(response => {
-        return response;
-      })
-      .catch(() => {
-        return caches.match(event.request);
-      })
+      .then(response => response)
+      .catch(() => caches.match(event.request))
   );
 });
